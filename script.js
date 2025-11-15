@@ -895,27 +895,43 @@ function renderUpgrades() {
   });
 }
 
+function ensureStockPrices() {
+    if (!stockPrices) stockPrices = {};
+
+    stockTypes.forEach(stock => {
+        if (!stockPrices[stock.id]) {
+            console.warn("Rebuilding price for:", stock.id);
+
+            stockPrices[stock.id] = {
+                current: stock.basePrice || 100,
+                previous: (stock.basePrice || 100) * 0.99
+            };
+        }
+    });
+}
+
+
 function renderStocks() {
     const grid = document.getElementById('stockGrid');
     grid.innerHTML = '';
 
-    stockTypes.forEach(stock => {
-        // FIX 1 — Ensure price object exists
-        const price = stockPrices[stock.id];
-        if (!price || price.current === undefined) {
-            console.warn(`Stock price missing for ID: ${stock.id}, rebuilding...`);
-            stockPrices[stock.id] = { current: 10, previous: 10 };
-            return; 
-        }
+stockTypes.forEach(stock => {
+    let price = stockPrices[stock.id];
 
-        // FIX 2 — Owned fallback
-        const owned = gameState.stocks?.[stock.id] ?? 0;
+    if (!price) {
+        console.warn("Stock price missing for ID:", stock.id, ", rebuilding...");
+
+        price = stockPrices[stock.id] = {
+            current: stock.basePrice || 100,
+            previous: (stock.basePrice || 100) * 0.95
+        };
+    }
+
+    const owned = gameState.stocks[stock.id] || 0;
+    const change = ((price.current - price.previous) / price.previous) * 100;
 
         // FIX 3 — Prevent division by 0 or undefined
         const previous = price.previous || price.current;
-        const change = previous === 0 
-            ? 0
-            : ((price.current - previous) / previous) * 100;
 
         const canBuy = gameState.cash >= price.current;
 
