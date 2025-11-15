@@ -895,45 +895,59 @@ function renderUpgrades() {
   });
 }
 
-        function renderStocks() {
-            const grid = document.getElementById('stockGrid');
-            grid.innerHTML = '';
-            
-            stockTypes.forEach(stock => {
-                const price = stockPrices[stock.id];
-                const owned = gameState.stocks[stock.id] || 0;
-                const change = ((price.current - price.previous) / price.previous) * 100;
-                const canBuy = gameState.cash >= price.current;
-                
-                const item = document.createElement('div');
-                item.className = 'stock-item';
-                
-                item.innerHTML = `
-                    <div class="stock-info">
-                        <div class="stock-name">${stock.name}</div>
-                        <div class="stock-price">${getCurrencySymbol()}${formatNumber(price.current)}</div>
-                        <div class="stock-change ${change >= 0 ? 'positive' : 'negative'}">
-                            ${change >= 0 ? '+' : ''}${change.toFixed(2)}%
-                        </div>
-                        <div style="font-size: 0.8rem; opacity: 0.8;">Owned: ${owned}</div>
-                    </div>
-                    <div class="stock-actions">
-                        <button class="stock-btn buy-stock-btn" 
-                                onclick="buyStock('${stock.id}')" 
-                                ${!canBuy || isLoading ? 'disabled' : ''}>
-                            Buy
-                        </button>
-                        <button class="stock-btn sell-stock-btn" 
-                                onclick="sellStock('${stock.id}')" 
-                                ${owned === 0 || isLoading ? 'disabled' : ''}>
-                            Sell
-                        </button>
-                    </div>
-                `;
-                
-                grid.appendChild(item);
-            });
+function renderStocks() {
+    const grid = document.getElementById('stockGrid');
+    grid.innerHTML = '';
+
+    stockTypes.forEach(stock => {
+        // FIX 1 — Ensure price object exists
+        const price = stockPrices[stock.id];
+        if (!price || price.current === undefined) {
+            console.warn(`Stock price missing for ID: ${stock.id}, rebuilding...`);
+            stockPrices[stock.id] = { current: 10, previous: 10 };
+            return; 
         }
+
+        // FIX 2 — Owned fallback
+        const owned = gameState.stocks?.[stock.id] ?? 0;
+
+        // FIX 3 — Prevent division by 0 or undefined
+        const previous = price.previous || price.current;
+        const change = previous === 0 
+            ? 0
+            : ((price.current - previous) / previous) * 100;
+
+        const canBuy = gameState.cash >= price.current;
+
+        const item = document.createElement('div');
+        item.className = 'stock-item';
+
+        item.innerHTML = `
+            <div class="stock-info">
+                <div class="stock-name">${stock.name}</div>
+                <div class="stock-price">${getCurrencySymbol()}${formatNumber(price.current)}</div>
+                <div class="stock-change ${change >= 0 ? 'positive' : 'negative'}">
+                    ${change >= 0 ? '+' : ''}${change.toFixed(2)}%
+                </div>
+                <div style="font-size: 0.8rem; opacity: 0.8;">Owned: ${owned}</div>
+            </div>
+            <div class="stock-actions">
+                <button class="stock-btn buy-stock-btn" 
+                        onclick="buyStock('${stock.id}')"
+                        ${!canBuy || isLoading ? 'disabled' : ''}>
+                    Buy
+                </button>
+                <button class="stock-btn sell-stock-btn" 
+                        onclick="sellStock('${stock.id}')"
+                        ${owned === 0 || isLoading ? 'disabled' : ''}>
+                    Sell
+                </button>
+            </div>
+        `;
+
+        grid.appendChild(item);
+    });
+}
 
         function renderAchievements() {
             const grid = document.getElementById('achievementGrid');
