@@ -427,48 +427,74 @@
             document.getElementById('currentCityDesc').textContent = city.description;
         }
 
-        // Business operations
-        async function buyBusiness(businessId) {
-            if (isLoading) return;
-            
-            const business = businessTypes.find(b => b.id === businessId);
-            const owned = gameState.businesses[businessId] || 0;
-            const price = calculateBusinessPrice(business, owned);
-            
-            if (gameState.cash >= price) {
-                isLoading = true;
-                
-                gameState.cash -= price;
-                gameState.businesses[businessId] = owned + 1;
-                gameState.statistics.businessesBought++;
-                gameState.statistics.totalEarned += price;
-                
-                // Add experience
-                const expGain = Math.floor(price / 100);
-                gameState.experience += expGain;
-                
-                // Level up check
-                const newLevel = Math.floor(gameState.experience / 1000) + 1;
-                if (newLevel > gameState.level) {
-                    gameState.level = newLevel;
-                    showNotification(`🎉 Level Up! You are now level ${gameState.level}!`);
-                    playSound('levelup');
-                }
-                
-                // Update daily challenge progress
-                updateDailyProgress('buy_businesses', 1);
-                
-                updateDisplay();
-                renderAllContent();
-                checkAchievements();
-                await autoSave();
-                
-                showNotification(`🎉 Bought ${business.name}! +${getCurrencySymbol()}${formatNumber(business.baseIncome)}/sec`);
-                playSound('purchase');
-                
-                isLoading = false;
-            }
+async function buyBusiness(businessId) {
+    console.log("buyBusiness called:", businessId, "isLoading:", isLoading);
+
+    if (isLoading) return;
+
+    const business = businessTypes.find(b => b.id === businessId);
+
+    // ❌ FIX 1: Prevent null business
+    if (!business) {
+        console.error("ERROR: businessId not found:", businessId);
+        return;
+    }
+
+    const owned = gameState.businesses[businessId] || 0;
+    const price = calculateBusinessPrice(business, owned);
+
+    // ❌ FIX 2: Prevent NaN price
+    if (isNaN(price)) {
+        console.error("ERROR: calculateBusinessPrice returned NaN for:", businessId);
+        return;
+    }
+
+    console.log("Cash:", gameState.cash, "Price:", price);
+
+    if (gameState.cash < price) {
+        console.log("Not enough cash.");
+        return;
+    }
+
+    isLoading = true;
+
+    try {
+        gameState.cash -= price;
+        gameState.businesses[businessId] = owned + 1;
+        gameState.statistics.businessesBought++;
+        gameState.statistics.totalEarned += price;
+
+        const expGain = Math.floor(price / 100);
+        gameState.experience += expGain;
+
+        const newLevel = Math.floor(gameState.experience / 1000) + 1;
+        if (newLevel > gameState.level) {
+            gameState.level = newLevel;
+            showNotification(`🎉 Level Up! You are now level ${gameState.level}!`);
+            playSound('levelup');
         }
+
+        updateDailyProgress('buy_businesses', 1);
+
+        updateDisplay();
+        renderAllContent();
+        checkAchievements();
+
+        // ❌ FIX 3: autoSave may crash
+        await autoSave();
+
+        showNotification(`🎉 Bought ${business.name}! +${getCurrencySymbol()}${formatNumber(business.baseIncome)}/sec`);
+        playSound('purchase');
+
+    } catch (err) {
+        console.error("buyBusiness ERROR:", err);
+
+    } finally {
+        // ❌ FIX 4: Make sure this ALWAYS runs
+        isLoading = false;
+    }
+}
+
 
         // Upgrade system
         async function buyUpgrade(upgradeId) {
