@@ -6,136 +6,195 @@
   <title>Business Empire Mobile</title>
   <script>
 // ===================== DATA SDK ===================== //
-window.dataSdk = {
-    SAVE_KEY: "business_empire_save",
-    handler: null,
+// Compatible with your game's handler.onDataChanged(dataArray)
+// and with autoSave() which calls dataSdk.create(...) or dataSdk.update(...)
 
-    async init(handler) {
-        this.handler = handler;
+(function () {
+  const SAVE_KEY = "business_empire_save_v1";
 
-        const saved = this.load();
-        const dataArray = saved ? [saved] : [];
+  window.dataSdk = window.dataSdk || {};
 
-        // Send saved data to the game
-        handler.onDataChanged(dataArray);
+  // internal handler set by init()
+  window.dataSdk.handler = null;
 
-        return { isOk: true };
-    },
+  function loadRaw() {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (e) { console.error("dataSdk.parse error", e); return null; }
+  }
 
-    load() {
-        const raw = localStorage.getItem(this.SAVE_KEY);
-        if (!raw) return null;
-
-        try {
-            return JSON.parse(raw);
-        } catch (e) {
-            console.error("Failed to parse save:", e);
-            return null;
-        }
-    },
-
-    save(state) {
-        localStorage.setItem(this.SAVE_KEY, JSON.stringify(state));
-    },
-
-    // Game calls this when creating a NEW save
-    async create(record) {
-        this.save(record);
-
-        // Sync with game
-        if (this.handler) {
-            this.handler.onDataChanged([record]);
-        }
-
-        return { isOk: true };
-    },
-
-    // Game calls this when UPDATING a save
-    async updateRecord(record) {
-        this.save(record);
-
-        // Sync with game
-        if (this.handler) {
-            this.handler.onDataChanged([record]);
-        }
-
-        return { isOk: true };
+  function saveRaw(obj) {
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(obj));
+      return true;
+    } catch (e) {
+      console.error("dataSdk.save error", e);
+      return false;
     }
-};
+  }
+
+  // init(handler) -> calls handler.onDataChanged(dataArray)
+  window.dataSdk.init = async function (handler) {
+    this.handler = handler || null;
+
+    const saved = loadRaw();
+    const dataArray = saved ? [saved] : [];
+
+    // call game handler in next tick to avoid blocking
+    try {
+      if (this.handler && typeof this.handler.onDataChanged === "function") {
+        this.handler.onDataChanged(dataArray);
+      }
+    } catch (e) {
+      console.error("dataSdk.init handler error", e);
+    }
+
+    return { isOk: true };
+  };
+
+  // create(record) - used when saving first time
+  window.dataSdk.create = async function (record) {
+    try {
+      // add an id if missing
+      if (!record.id) record.id = "save-" + Date.now();
+      saveRaw(record);
+
+      if (this.handler && typeof this.handler.onDataChanged === "function") {
+        this.handler.onDataChanged([record]);
+      }
+
+      return { isOk: true, record };
+    } catch (e) {
+      console.error("dataSdk.create error", e);
+      return { isOk: false, error: e };
+    }
+  };
+
+  // update(record) - used when updating existing save
+  window.dataSdk.update = async function (record) {
+    try {
+      // keep id if exists, otherwise create new id
+      if (!record.id) record.id = "save-" + Date.now();
+      saveRaw(record);
+
+      if (this.handler && typeof this.handler.onDataChanged === "function") {
+        this.handler.onDataChanged([record]);
+      }
+
+      return { isOk: true, record };
+    } catch (e) {
+      console.error("dataSdk.update error", e);
+      return { isOk: false, error: e };
+    }
+  };
+
+  // alias for update (some scripts call updateRecord)
+  window.dataSdk.updateRecord = window.dataSdk.update;
+
+  // simple getAll() - returns array (keeps parity with handler expectations)
+  window.dataSdk.getAll = function () {
+    const s = loadRaw();
+    return s ? [s] : [];
+  };
+
+  // convenience: clear save (dev)
+  window.dataSdk.clear = function () {
+    localStorage.removeItem(SAVE_KEY);
+    if (this.handler && typeof this.handler.onDataChanged === "function") {
+      this.handler.onDataChanged([]);
+    }
+    return { isOk: true };
+  };
+})();
 </script>
   <script>
 // ===================== ELEMENT SDK ===================== //
-window.elementSdk = {
-    config: {},
-    handler: null,
-    defaultConfig: {},
+// Provides init({ defaultConfig, onConfigChange, mapToCapabilities, mapToEditPanelValues })
+// Persists config to localStorage and always calls onConfigChange(config)
 
-    async init({
-        defaultConfig,
-        onConfigChange,
-        mapToCapabilities,
-        mapToEditPanelValues
-    }) {
-        this.defaultConfig = { ...defaultConfig };
-        this.onConfigChange = onConfigChange;
-        this.mapToCapabilities = mapToCapabilities;
-        this.mapToEditPanelValues = mapToEditPanelValues;
+(function () {
+  const CONFIG_KEY = "business_empire_config_v1";
+  window.elementSdk = window.elementSdk || {};
 
-        // Load stored config or fall back to default
-        const stored = localStorage.getItem("business_empire_config");
+  window.elementSdk.config = {};
+  window.elementSdk.onConfigChange = null;
+  window.elementSdk.mapToCapabilities = null;
+  window.elementSdk.mapToEditPanelValues = null;
+  window.elementSdk.defaultConfig = {};
 
-        if (stored) {
-            try {
-                this.config = { ...defaultConfig, ...JSON.parse(stored) };
-            } catch (e) {
-                console.error("Config parse failed:", e);
-                this.config = { ...defaultConfig };
-            }
-        } else {
-            this.config = { ...defaultConfig };
-        }
+  function loadConfig() {
+    const raw = localStorage.getItem(CONFIG_KEY);
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (e) { console.error("elementSdk.parse error", e); return null; }
+  }
 
-        // Ensure no missing fields cause errors
-        for (let key in defaultConfig) {
-            if (this.config[key] === undefined) {
-                this.config[key] = defaultConfig[key];
-            }
-        }
-
-        // Immediately tell the game about the config
-        await this.onConfigChange(this.config);
-
-        return { isOk: true };
-    },
-
-    async updateConfig(newConfig) {
-        // Merge new config with existing config
-        this.config = { ...this.config, ...newConfig };
-
-        // Save
-        localStorage.setItem("business_empire_config", JSON.stringify(this.config));
-
-        // Notify game handler
-        await this.onConfigChange(this.config);
-
-        return { isOk: true };
-    },
-
-    // Required by Element SDK UI
-    getCapabilities() {
-        if (typeof this.mapToCapabilities === "function") {
-            return this.mapToCapabilities(this.config);
-        }
-        return {};
-    },
-
-    getEditPanelValues() {
-        if (typeof this.mapToEditPanelValues === "function") {
-            return this.mapToEditPanelValues(this.config);
-        }
-        return {};
+  function saveConfig(cfg) {
+    try {
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
+      return true;
+    } catch (e) {
+      console.error("elementSdk.save error", e);
+      return false;
     }
-};
+  }
+
+  window.elementSdk.init = async function ({ defaultConfig = {}, onConfigChange = () => {}, mapToCapabilities = () => ({}), mapToEditPanelValues = () => new Map() } = {}) {
+    this.defaultConfig = { ...defaultConfig };
+    this.onConfigChange = onConfigChange;
+    this.mapToCapabilities = mapToCapabilities;
+    this.mapToEditPanelValues = mapToEditPanelValues;
+
+    // load stored config or fallback to defaultConfig
+    const stored = loadConfig();
+    this.config = stored ? { ...defaultConfig, ...stored } : { ...defaultConfig };
+
+    // ensure default keys exist
+    for (const k in defaultConfig) {
+      if (this.config[k] === undefined) this.config[k] = defaultConfig[k];
+    }
+
+    // expose config for convenience (game reads window.elementSdk?.config?.currency_symbol)
+    window.elementSdk.config = this.config;
+
+    // call game's handler
+    try {
+      await this.onConfigChange(this.config);
+    } catch (e) {
+      console.error("elementSdk.onConfigChange error", e);
+    }
+
+    return { isOk: true };
+  };
+
+  // updateConfig(newConfig) - merges, persists, and notifies
+  window.elementSdk.updateConfig = async function (newConfig = {}) {
+    this.config = { ...this.config, ...newConfig };
+    window.elementSdk.config = this.config;
+    saveConfig(this.config);
+
+    try {
+      if (this.onConfigChange) await this.onConfigChange(this.config);
+    } catch (e) {
+      console.error("elementSdk.updateConfig onConfigChange error", e);
+    }
+
+    return { isOk: true, config: this.config };
+  };
+
+  window.elementSdk.getCapabilities = function () {
+    try {
+      if (typeof this.mapToCapabilities === "function") return this.mapToCapabilities(this.config);
+    } catch (e) { console.error(e); }
+    return {};
+  };
+
+  window.elementSdk.getEditPanelValues = function () {
+    try {
+      if (typeof this.mapToEditPanelValues === "function") return this.mapToEditPanelValues(this.config);
+    } catch (e) { console.error(e); }
+    return new Map();
+  };
+})();
   </script>
   <link rel="stylesheet" href="style.css">
   <style>@view-transition { navigation: auto; }</style>
