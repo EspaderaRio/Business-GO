@@ -189,7 +189,7 @@
         // Daily challenges
         const dailyChallenges = [
             { id: 'earn_money', name: 'Money Maker', description: 'Earn $10,000', target: 10000, reward: 1000, type: 'earn' },
-            { id: 'buy_businesses', name: 'Expansion', description: 'Buy 5 businesses', target: 5, reward: 2000, type: 'buy' },
+            { id: 'buy_businesses', name: 'Expansion', description: 'Buy 5 businesses', target: 5, reward: 2000, type: 'buy_businesses' },
             { id: 'stock_trades', name: 'Trader', description: 'Make 3 stock trades', target: 3, reward: 1500, type: 'trade' },
             { id: 'level_up', name: 'Growth', description: 'Gain 1 level', target: 1, reward: 3000, type: 'level' }
         ];
@@ -836,39 +836,38 @@
             });
         }
 
-        function renderUpgrades() {
-            const grid = document.getElementById('upgradeGrid');
-            grid.innerHTML = '';
-            
-            upgradeTypes.forEach(upgrade => {
-                const owned = gameState.upgrades[upgrade.id];
-                const canAfford = gameState.cash >= upgrade.price;
-                
-                const card = document.createElement('div');
-                card.className = `business-card ${owned ? 'owned' : ''}`;
-                
-                card.innerHTML = `
-                    <div class="business-header">
-                        <div class="business-icon">⚡</div>
-                        <div class="business-info">
-                            <div class="business-name">${upgrade.name}</div>
-                            <div class="business-income">${upgrade.description}</div>
-                        </div>
-                    </div>
-                    <div class="business-stats">
-                        <div class="business-price">${getCurrencySymbol()}${formatNumber(upgrade.price)}</div>
-                        <div class="business-owned">${owned ? 'Owned' : 'Available'}</div>
-                    </div>
-                    <button class="business-btn upgrade-btn" 
-                            onclick="buyUpgrade('${upgrade.id}')" 
-                            ${!canAfford || owned || isLoading ? 'disabled' : ''}>
-                        ${owned ? 'Purchased' : 'Buy Upgrade'}
-                    </button>
-                `;
-                
-                grid.appendChild(card);
-            });
-        }
+function renderUpgrades() {
+  const grid = document.getElementById('upgradeGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  upgradeTypes.forEach(upgrade => {
+    const owned = gameState.upgrades[upgrade.id];
+    const canAfford = gameState.cash >= (upgrade.price || 0);
+
+    const card = document.createElement('div');
+    card.className = `business-card ${owned ? 'owned' : ''}`;
+
+    card.innerHTML = `
+      <div class="business-header">
+        <div class="business-icon">⚡</div>
+        <div class="business-info">
+          <div class="business-name">${upgrade.name}</div>
+          <div class="business-income">${upgrade.description}</div>
+        </div>
+      </div>
+      <div class="business-stats">
+        <div class="business-price">${getCurrencySymbol()}${formatNumber(upgrade.price || 0)}</div>
+        <div class="business-owned">${owned ? 'Owned' : 'Available'}</div>
+      </div>
+      <button class="business-btn upgrade-btn" onclick="buyUpgrade('${upgrade.id}')" ${(!canAfford || owned || isLoading) ? 'disabled' : ''}>
+        ${owned ? 'Purchased' : 'Buy Upgrade'}
+      </button>
+    `;
+
+    grid.appendChild(card);
+  });
+}
 
         function renderStocks() {
             const grid = document.getElementById('stockGrid');
@@ -1131,13 +1130,17 @@
             playSound('click');
         }
 
-        function applyTheme() {
-            if (gameState.settings.theme === 'light') {
-                document.body.classList.add('light-theme');
-            } else {
-                document.body.classList.remove('light-theme');
-            }
-        }
+function applyTheme() {
+  const theme = window.elementSdk?.config?.theme || gameState.settings.theme || 'dark';
+  if (theme === 'light') {
+    document.body.classList.add('light-theme');
+    document.body.classList.remove('dark-theme');
+  } else {
+    document.body.classList.remove('light-theme');
+    document.body.classList.add('dark-theme');
+  }
+}
+
 
         function toggleSound() {
             gameState.settings.soundEnabled = !gameState.settings.soundEnabled;
