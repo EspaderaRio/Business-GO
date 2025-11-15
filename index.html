@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Business Empire Mobile</title>
+  <script>
+    // ===================== DATA SDK ===================== //
+window.dataSdk = {
+    SAVE_KEY: "business_empire_save",
+    handler: null,
+
+    async init(handler) {
+        this.handler = handler;
+        const state = this.load();
+
+        // Convert the stored object into an array for the handler, as expected
+        const dataArray = state ? [state] : [];
+
+        // Call the game's onDataChanged function
+        handler.onDataChanged(dataArray);
+
+        return Promise.resolve({ isOk: true });
+    },
+
+    save(state) {
+        localStorage.setItem(this.SAVE_KEY, JSON.stringify(state));
+    },
+
+    load() {
+        const raw = localStorage.getItem(this.SAVE_KEY);
+        if (!raw) return null;
+
+        try {
+            return JSON.parse(raw);
+        } catch (e) {
+            console.error("Failed to parse save:", e);
+            return null;
+        }
+    },
+
+    // Called by game autoSave()
+    async updateRecord(updatedRecord) {
+        this.save(updatedRecord);
+
+        // Sync with game
+        if (this.handler) {
+            this.handler.onDataChanged([updatedRecord]);
+        }
+
+        return { isOk: true };
+    }
+};
+</script>
+  <script>
+    // ===================== ELEMENT SDK ===================== //
+window.elementSdk = {
+    config: {},
+    handler: null,
+
+    async init({ defaultConfig, onConfigChange, mapToCapabilities, mapToEditPanelValues }) {
+        this.defaultConfig = defaultConfig;
+        this.onConfigChange = onConfigChange;
+        this.mapToCapabilities = mapToCapabilities;
+        this.mapToEditPanelValues = mapToEditPanelValues;
+
+        // Load stored config if exists
+        const stored = localStorage.getItem("business_empire_config");
+        this.config = stored ? JSON.parse(stored) : { ...defaultConfig };
+
+        // Send the config to your game's handler
+        await onConfigChange(this.config);
+
+        return { isOk: true };
+    },
+
+    async updateConfig(newConfig) {
+        this.config = { ...this.config, ...newConfig };
+
+        localStorage.setItem("business_empire_config", JSON.stringify(this.config));
+
+        await this.onConfigChange(this.config);
+
+        return { isOk: true };
+    }
+};
+  </script>
+  <link rel="stylesheet" href="styles.css">
+  <style>@view-transition { navigation: auto; }</style>
+  <script src="tailwindcss.js" type="text/javascript"></script>
+ </head>
+ <body>
+  <div class="mobile-app">
+   <header class="header">
+    <div class="header-top">
+     <h1 class="game-title" id="gameTitle">Business Empire Mobile</h1><button class="settings-btn" onclick="openSettings()">⚙️</button>
+    </div>
+    <div class="stats-grid">
+     <div class="stat-card">
+      <div class="stat-value" id="cashDisplay">
+       $0
+      </div>
+      <div class="stat-label">
+       Cash
+      </div>
+     </div>
+     <div class="stat-card">
+      <div class="stat-value" id="incomeDisplay">
+       $0/s
+      </div>
+      <div class="stat-label">
+       Income
+      </div>
+     </div>
+     <div class="stat-card">
+      <div class="stat-value" id="levelDisplay">
+       1
+      </div>
+      <div class="stat-label">
+       Level
+      </div>
+     </div>
+     <div class="stat-card">
+      <div class="stat-value" id="prestigeDisplay">
+       0
+      </div>
+      <div class="stat-label">
+       Prestige
+      </div>
+     </div>
+    </div>
+   </header>
+   <div id="eventBanner" class="event-banner" style="display: none;">
+    <div class="event-title" id="eventTitle"></div>
+    <div class="event-description" id="eventDescription"></div>
+   </div>
+   <nav class="tab-navigation"><button class="tab-btn active" onclick="switchTab('businesses')">🏢 Business</button> <button class="tab-btn" onclick="switchTab('cities')">🌍 Cities</button> <button class="tab-btn" onclick="switchTab('upgrades')">⚡ Upgrades</button> <button class="tab-btn" onclick="switchTab('stocks')">📈 Stocks</button> <button class="tab-btn" onclick="switchTab('achievements')">🏆 Goals</button> <button class="tab-btn" onclick="switchTab('skills')">🎯 Skills</button>
+   </nav>
+   <main class="main-content">
+    <div id="businesses" class="tab-content active">
+     <h2 class="section-title">🏢 Business Empire</h2>
+     <div id="currentCityInfo" class="prestige-section" style="background: linear-gradient(45deg, #4ade80, #22c55e); color: #1a1a1a; margin-bottom: 20px;">
+      <div class="prestige-title" id="currentCityName">
+       🗽 New York
+      </div>
+      <p id="currentCityDesc">The Big Apple - Financial capital</p>
+     </div>
+     <div id="prestigeSection" class="prestige-section" style="display: none;">
+      <div class="prestige-title">
+       Ready to Prestige?
+      </div>
+      <p>Reset your progress for permanent bonuses!</p><button class="prestige-btn" onclick="showPrestigeModal()">Prestige Now</button>
+     </div>
+     <div class="business-grid" id="businessGrid"></div>
+    </div>
+    <div id="cities" class="tab-content">
+     <h2 class="section-title">🌍 Global Expansion</h2>
+     <div class="business-grid" id="cityGrid"></div>
+    </div>
+    <div id="upgrades" class="tab-content">
+     <h2 class="section-title">⚡ Business Upgrades</h2>
+     <div class="business-grid" id="upgradeGrid"></div>
+    </div>
+    <div id="stocks" class="tab-content">
+     <h2 class="section-title">📈 Stock Market</h2>
+     <div class="stock-grid" id="stockGrid"></div>
+    </div>
+    <div id="achievements" class="tab-content">
+     <h2 class="section-title">🏆 Achievements</h2>
+     <div class="achievement-grid" id="achievementGrid"></div>
+     <h3 class="section-title" style="margin-top: 30px;">📅 Daily Challenges</h3>
+     <div class="daily-challenges" id="dailyChallenges"></div>
+    </div>
+    <div id="skills" class="tab-content">
+     <h2 class="section-title">🎯 Skill Tree</h2>
+     <div class="skill-tree" id="skillTree"></div>
+    </div>
+   </main><button class="floating-action" onclick="collectAllIncome()" id="collectBtn">💰</button>
+  </div><!-- Modals -->
+  <div id="settingsModal" class="modal">
+   <div class="modal-content"><button class="modal-close" onclick="closeModal('settingsModal')">×</button>
+    <h2 class="modal-title">⚙️ Settings</h2>
+    <div class="action-grid"><button class="action-btn" onclick="toggleTheme()">
+      <div>
+       🌙 Toggle Dark/Light Theme
+      </div></button> <button class="action-btn" onclick="toggleSound()">
+      <div>
+       🔊 Toggle Sound Effects
+      </div></button> <button class="action-btn" onclick="exportProgress()">
+      <div>
+       📤 Export Progress
+      </div></button> <button class="action-btn" onclick="showStats()">
+      <div>
+       📊 View Statistics
+      </div></button> <button class="action-btn" onclick="autoSave()">
+      <div>
+       💾 Save Game
+      </div></button>
+    </div>
+   </div>
+  </div>
+  <div id="prestigeModal" class="modal">
+   <div class="modal-content"><button class="modal-close" onclick="closeModal('prestigeModal')">×</button>
+    <h2 class="modal-title">✨ Prestige System</h2>
+    <p>Prestiging will reset your progress but grant permanent bonuses!</p>
+    <div id="prestigeInfo"></div>
+    <div style="margin-top: 20px;"><button class="prestige-btn" onclick="performPrestige()" style="margin-right: 10px;">Confirm Prestige</button> <button class="action-btn" onclick="closeModal('prestigeModal')" style="display: inline-block; width: auto; padding: 12px 24px;">Cancel</button>
+    </div>
+   </div>
+  </div>
+  <div class="notification" id="notification"></div>
+  <script src="script.js"></script>
+ </body>
+</html>
